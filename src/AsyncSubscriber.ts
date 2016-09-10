@@ -18,8 +18,6 @@ import { AsyncObserver, AsyncPartialObserver } from './AsyncObserver';
  */
 export class AsyncSubscriber<T> extends Subscriber<T> implements AsyncObserver<T> {
 
-  [$$rxSubscriber]() { return this; }
-
   /**
    * A static factory for a Subscriber, given a (potentially partial) definition
    * of an Observer.
@@ -39,11 +37,6 @@ export class AsyncSubscriber<T> extends Subscriber<T> implements AsyncObserver<T
     return subscriber;
   }
 
-  public syncErrorValue: any = null;
-  public syncErrorThrown: boolean = false;
-  public syncErrorThrowable: boolean = false;
-
-  protected isStopped: boolean = false;
   protected destination: AsyncPartialObserver<any>; // this `any` is the escape hatch to erase extra type param (e.g. R)
 
   /**
@@ -98,53 +91,8 @@ export class AsyncSubscriber<T> extends Subscriber<T> implements AsyncObserver<T
     }
   }
 
-  /**
-   * The {@link Observer} callback to receive notifications of type `error` from
-   * the Observable, with an attached {@link Error}. Notifies the Observer that
-   * the Observable has experienced an error condition.
-   * @param {any} [err] The `error` exception.
-   * @return {void}
-   */
-  error(err?: any): void {
-    if (!this.isStopped) {
-      this.isStopped = true;
-      this._error(err);
-    }
-  }
-
-  /**
-   * The {@link Observer} callback to receive a valueless notification of type
-   * `complete` from the Observable. Notifies the Observer that the Observable
-   * has finished sending push-based notifications.
-   * @return {void}
-   */
-  complete(): void {
-    if (!this.isStopped) {
-      this.isStopped = true;
-      this._complete();
-    }
-  }
-
-  unsubscribe(): void {
-    if (this.closed) {
-      return;
-    }
-    this.isStopped = true;
-    super.unsubscribe();
-  }
-
   protected _next(value: T): Promise<void> | void {
     return this.destination.next(value);
-  }
-
-  protected _error(err: any): void {
-    this.destination.error(err);
-    this.unsubscribe();
-  }
-
-  protected _complete(): void {
-    this.destination.complete();
-    this.unsubscribe();
   }
 }
 
@@ -201,45 +149,6 @@ class AsyncSafeSubscriber<T> extends AsyncSubscriber<T> {
     }
   }
 
-  error(err?: any): void {
-    if (!this.isStopped) {
-      const { _parent } = this;
-      if (this._error) {
-        if (!_parent.syncErrorThrowable) {
-          this.__tryOrUnsub(this._error, err);
-          this.unsubscribe();
-        } else {
-          this.__tryOrSetError(_parent, this._error, err);
-          this.unsubscribe();
-        }
-      } else if (!_parent.syncErrorThrowable) {
-        this.unsubscribe();
-        throw err;
-      } else {
-        _parent.syncErrorValue = err;
-        _parent.syncErrorThrown = true;
-        this.unsubscribe();
-      }
-    }
-  }
-
-  complete(): void {
-    if (!this.isStopped) {
-      const { _parent } = this;
-      if (this._complete) {
-        if (!_parent.syncErrorThrowable) {
-          this.__tryOrUnsub(this._complete);
-          this.unsubscribe();
-        } else {
-          this.__tryOrSetError(_parent, this._complete);
-          this.unsubscribe();
-        }
-      } else {
-        this.unsubscribe();
-      }
-    }
-  }
-
   private __tryOrUnsub(fn: Function, value?: any): Promise<void> {
     try {
       return fn.call(this._context, value);
@@ -262,20 +171,5 @@ class AsyncSafeSubscriber<T> extends AsyncSubscriber<T> {
         syncError: true
       };
     }
-    //return false;
-    /*return Promise.resolve(fn.call(this._context, value))
-      .then(() => false)
-      .catch(error => {
-        parent.syncErrorValue = error;
-        parent.syncErrorThrown = true;
-        return true;
-      });*/
-  }
-
-  protected _unsubscribe(): void {
-    const { _parent } = this;
-    this._context = null;
-    this._parent = null;
-    _parent.unsubscribe();
   }
 }
