@@ -4,7 +4,8 @@
   "description": "RxJS compatible observables allowing the next method to return a promise",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p ."
+    "build": "tsc -p .",
+    "typings-install": "typings install"
   },
   "keywords": [
     "Rx",
